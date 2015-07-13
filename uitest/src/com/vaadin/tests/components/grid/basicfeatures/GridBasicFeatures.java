@@ -29,6 +29,8 @@ import java.util.Random;
 import com.vaadin.data.Container.Filter;
 import com.vaadin.data.Item;
 import com.vaadin.data.Property;
+import com.vaadin.data.Property.ValueChangeEvent;
+import com.vaadin.data.Property.ValueChangeListener;
 import com.vaadin.data.fieldgroup.FieldGroup.CommitException;
 import com.vaadin.data.sort.Sort;
 import com.vaadin.data.sort.SortOrder;
@@ -48,6 +50,7 @@ import com.vaadin.ui.Button.ClickEvent;
 import com.vaadin.ui.Button.ClickListener;
 import com.vaadin.ui.Component;
 import com.vaadin.ui.CssLayout;
+import com.vaadin.ui.Field;
 import com.vaadin.ui.Grid;
 import com.vaadin.ui.Grid.CellReference;
 import com.vaadin.ui.Grid.CellStyleGenerator;
@@ -57,6 +60,10 @@ import com.vaadin.ui.Grid.ColumnReorderListener;
 import com.vaadin.ui.Grid.ColumnVisibilityChangeEvent;
 import com.vaadin.ui.Grid.ColumnVisibilityChangeListener;
 import com.vaadin.ui.Grid.DetailsGenerator;
+import com.vaadin.ui.Grid.EditorCloseEvent;
+import com.vaadin.ui.Grid.EditorListener;
+import com.vaadin.ui.Grid.EditorMoveEvent;
+import com.vaadin.ui.Grid.EditorOpenEvent;
 import com.vaadin.ui.Grid.FooterCell;
 import com.vaadin.ui.Grid.HeaderCell;
 import com.vaadin.ui.Grid.HeaderRow;
@@ -120,6 +127,24 @@ public class GridBasicFeatures extends AbstractComponentTest<Grid> {
             log("Item " + (event.isDoubleClick() ? "double " : "")
                     + "click on " + event.getPropertyId() + ", item "
                     + event.getItemId());
+        }
+    };
+
+    private ItemClickListener editorOpeningItemClickListener = new ItemClickListener() {
+
+        @Override
+        public void itemClick(ItemClickEvent event) {
+            grid.editItem(event.getItemId());
+        }
+    };
+
+    private ValueChangeListener reactiveValueChanger = new ValueChangeListener() {
+        @Override
+        @SuppressWarnings("unchecked")
+        public void valueChange(ValueChangeEvent event) {
+            Object id = grid.getEditedItemId();
+            grid.getContainerDataSource().getContainerProperty(id, "Column 2")
+                    .setValue("Modified");
         }
     };
 
@@ -362,49 +387,58 @@ public class GridBasicFeatures extends AbstractComponentTest<Grid> {
     }
 
     private void addFilterActions() {
-        createClickAction("Column 1 starts with \"(23\"", "Filter",
-                new Command<Grid, Void>() {
+        createBooleanAction("Column 1 starts with \"(23\"", "Filter", false,
+                new Command<Grid, Boolean>() {
+                    Filter filter = new Filter() {
+                        @Override
+                        public boolean passesFilter(Object itemId, Item item) {
+                            return item.getItemProperty("Column 1").getValue()
+                                    .toString().startsWith("(23");
+                        }
+
+                        @Override
+                        public boolean appliesToProperty(Object propertyId) {
+                            return propertyId.equals("Column 1");
+                        }
+                    };
+
                     @Override
-                    public void execute(Grid grid, Void value, Object data) {
-                        ds.addContainerFilter(new Filter() {
-
-                            @Override
-                            public boolean passesFilter(Object itemId, Item item)
-                                    throws UnsupportedOperationException {
-                                return item.getItemProperty("Column 1")
-                                        .getValue().toString()
-                                        .startsWith("(23");
-                            }
-
-                            @Override
-                            public boolean appliesToProperty(Object propertyId) {
-                                return propertyId.equals("Column 1");
-                            }
-                        });
+                    public void execute(Grid grid, Boolean value, Object data) {
+                        if (value) {
+                            ds.addContainerFilter(filter);
+                        } else {
+                            ds.removeContainerFilter(filter);
+                        }
                     }
-                }, null);
+                });
 
-        createClickAction("Add impassable filter", "Filter",
-                new Command<Grid, Void>() {
+        createBooleanAction("Impassable filter", "Filter", false,
+                new Command<Grid, Boolean>() {
+                    Filter filter = new Filter() {
+                        @Override
+                        public boolean passesFilter(Object itemId, Item item) {
+                            return false;
+                        }
+
+                        @Override
+                        public boolean appliesToProperty(Object propertyId) {
+                            return true;
+                        }
+                    };
+
                     @Override
-                    public void execute(Grid c, Void value, Object data) {
-                        ds.addContainerFilter(new Filter() {
-                            @Override
-                            public boolean passesFilter(Object itemId, Item item)
-                                    throws UnsupportedOperationException {
-                                return false;
-                            }
-
-                            @Override
-                            public boolean appliesToProperty(Object propertyId) {
-                                return true;
-                            }
-                        });
+                    public void execute(Grid c, Boolean value, Object data) {
+                        if (value) {
+                            ds.addContainerFilter(filter);
+                        } else {
+                            ds.removeContainerFilter(filter);
+                        }
                     }
-                }, null);
+                });
     }
 
     protected void createGridActions() {
+
         LinkedHashMap<String, String> primaryStyleNames = new LinkedHashMap<String, String>();
         primaryStyleNames.put("v-grid", "v-grid");
         primaryStyleNames.put("v-escalator", "v-escalator");
@@ -638,6 +672,38 @@ public class GridBasicFeatures extends AbstractComponentTest<Grid> {
                     }
 
                 });
+        createBooleanAction("EditorOpeningItemClickListener", "State", false,
+                new Command<Grid, Boolean>() {
+
+                    @Override
+                    public void execute(Grid c, Boolean value, Object data) {
+                        if (!value) {
+                            c.removeItemClickListener(editorOpeningItemClickListener);
+                        } else {
+                            c.addItemClickListener(editorOpeningItemClickListener);
+                        }
+                    }
+
+                });
+        createBooleanAction("ReactiveValueChanger", "State", false,
+                new Command<Grid, Boolean>() {
+
+                    @Override
+                    public void execute(Grid c, Boolean value, Object data) {
+                        Field<?> targetField = grid.getEditorFieldGroup()
+                                .getField("Column 0");
+                        if (targetField != null) {
+                            if (!value) {
+                                targetField
+                                        .removeValueChangeListener(reactiveValueChanger);
+                            } else {
+                                targetField
+                                        .addValueChangeListener(reactiveValueChanger);
+                            }
+                        }
+                    }
+
+                });
         createBooleanAction("ColumnReorderListener", "State", false,
                 new Command<Grid, Boolean>() {
 
@@ -661,7 +727,6 @@ public class GridBasicFeatures extends AbstractComponentTest<Grid> {
                         }
                     }
                 });
-
         createBooleanAction("Single select allow deselect", "State",
                 singleSelectAllowDeselect, new Command<Grid, Boolean>() {
                     @Override
@@ -1218,6 +1283,14 @@ public class GridBasicFeatures extends AbstractComponentTest<Grid> {
                     }
                 });
 
+        createBooleanAction("Buffered mode", "Editor", true,
+                new Command<Grid, Boolean>() {
+                    @Override
+                    public void execute(Grid c, Boolean value, Object data) {
+                        c.setEditorBuffered(value);
+                    }
+                });
+
         createClickAction("Edit item 5", "Editor", new Command<Grid, String>() {
             @Override
             public void execute(Grid c, String value, Object data) {
@@ -1265,6 +1338,30 @@ public class GridBasicFeatures extends AbstractComponentTest<Grid> {
                         c.setEditorCancelCaption("ʃǝɔuɐↃ");
                     }
                 }, null);
+
+        createClickAction("Add editor state listener", "Editor",
+                new Command<Grid, String>() {
+                    @Override
+                    public void execute(Grid grid, String value, Object data) {
+                        grid.addEditorListener(new EditorListener() {
+                            @Override
+                            public void editorOpened(EditorOpenEvent e) {
+                                log("Editor opened");
+                            }
+
+                            @Override
+                            public void editorMoved(EditorMoveEvent e) {
+                                log("Editor moved");
+                            }
+
+                            @Override
+                            public void editorClosed(EditorCloseEvent e) {
+                                log("Editor closed");
+                            }
+                        });
+                    }
+                }, null);
+
     }
 
     @SuppressWarnings("boxing")

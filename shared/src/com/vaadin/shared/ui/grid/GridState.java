@@ -19,9 +19,9 @@ package com.vaadin.shared.ui.grid;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.vaadin.shared.AbstractComponentState;
 import com.vaadin.shared.annotations.DelegateToWidget;
 import com.vaadin.shared.data.sort.SortDirection;
+import com.vaadin.shared.ui.TabIndexState;
 
 /**
  * The shared state for the {@link com.vaadin.ui.components.grid.Grid} component
@@ -29,7 +29,7 @@ import com.vaadin.shared.data.sort.SortDirection;
  * @since 7.4
  * @author Vaadin Ltd
  */
-public class GridState extends AbstractComponentState {
+public class GridState extends TabIndexState {
 
     /**
      * A description of which of the three bundled SelectionModels is currently
@@ -156,10 +156,9 @@ public class GridState extends AbstractComponentState {
     /** The enabled state of the editor interface */
     public boolean editorEnabled = false;
 
-    /** Whether row data might contain generated row styles */
-    public boolean hasRowStyleGenerator;
-    /** Whether row data might contain generated cell styles */
-    public boolean hasCellStyleGenerator;
+    /** Buffered editor mode */
+    @DelegateToWidget
+    public boolean editorBuffered = true;
 
     /** The caption for the save button in the editor */
     @DelegateToWidget
