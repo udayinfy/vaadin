@@ -1167,6 +1167,8 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
 
         private int selectionLimit = DEFAULT_MAX_SELECTIONS;
 
+        private boolean allSelected;
+
         @Override
         public boolean select(final Object... itemIds)
                 throws IllegalArgumentException {
@@ -1212,6 +1214,9 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
                 }
                 fireSelectionEvent(oldSelection, selection);
             }
+
+            updateAllSelectedState();
+
             return selectionWillChange;
         }
 
@@ -1277,6 +1282,9 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
                 selection.removeAll(itemIds);
                 fireSelectionEvent(oldSelection, selection);
             }
+
+            updateAllSelectedState();
+
             return hasCommonElements;
         }
 
@@ -1357,6 +1365,8 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
                 fireSelectionEvent(oldSelection, selection);
             }
 
+            updateAllSelectedState();
+
             return changed;
         }
 
@@ -1368,6 +1378,13 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
             } else {
                 throw new IllegalArgumentException(
                         "Vararg array of itemIds may not be null");
+            }
+        }
+
+        private void updateAllSelectedState() {
+            if (allSelected != selection.size() >= selectionLimit) {
+                allSelected = selection.size() >= selectionLimit;
+                grid.getRpcProxy(GridClientRpc.class).setSelectAll(allSelected);
             }
         }
     }
@@ -3648,10 +3665,21 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
                                 safeConverter.getPresentationType(), locale);
             }
 
-            JsonValue encodedValue = renderer.encode(presentationValue);
+            JsonValue encodedValue;
+            try {
+                encodedValue = renderer.encode(presentationValue);
+            } catch (Exception e) {
+                getLogger().log(Level.SEVERE, "Unable to encode data", e);
+                encodedValue = renderer.encode(null);
+            }
 
             return encodedValue;
         }
+
+        private static Logger getLogger() {
+            return Logger.getLogger(AbstractRenderer.class.getName());
+        }
+
     }
 
     /**
@@ -4181,13 +4209,6 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
                     fireColumnVisibilityChangeEvent(column, hidden,
                             userOriginated);
                 }
-            }
-
-            @Override
-            public void sendDetailsComponents(int fetchId) {
-                getRpcProxy(GridClientRpc.class).setDetailsConnectorChanges(
-                        detailComponentManager.getAndResetConnectorChanges(),
-                        fetchId);
             }
 
             @Override
@@ -6150,6 +6171,9 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
      * Opens the editor interface for the provided item. Scrolls the Grid to
      * bring the item to view if it is not already visible.
      * 
+     * Note that any cell content rendered by a WidgetRenderer will not be
+     * visible in the editor row.
+     * 
      * @param itemId
      *            the id of the item to edit
      * @throws IllegalStateException
@@ -6555,8 +6579,6 @@ public class Grid extends AbstractFocusable implements SelectionNotifier,
         this.detailsGenerator = detailsGenerator;
 
         datasourceExtension.refreshDetails();
-        getRpcProxy(GridClientRpc.class).setDetailsConnectorChanges(
-                detailComponentManager.getAndResetConnectorChanges(), -1);
     }
 
     /**

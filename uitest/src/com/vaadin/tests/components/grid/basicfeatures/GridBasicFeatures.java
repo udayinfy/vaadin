@@ -792,6 +792,26 @@ public class GridBasicFeatures extends AbstractComponentTest<Grid> {
                         c.setColumnReorderingAllowed(value);
                     }
                 });
+
+        createClickAction("Select all", "State", new Command<Grid, String>() {
+            @Override
+            public void execute(Grid c, String value, Object data) {
+                SelectionModel selectionModel = c.getSelectionModel();
+                if (selectionModel instanceof SelectionModel.Multi) {
+                    ((SelectionModel.Multi) selectionModel).selectAll();
+                }
+            }
+        }, null);
+
+        createClickAction("Select none", "State", new Command<Grid, String>() {
+            @Override
+            public void execute(Grid c, String value, Object data) {
+                SelectionModel selectionModel = c.getSelectionModel();
+                if (selectionModel instanceof SelectionModel.Multi) {
+                    ((SelectionModel.Multi) selectionModel).deselectAll();
+                }
+            }
+        }, null);
     }
 
     protected void createHeaderActions() {
@@ -1154,6 +1174,18 @@ public class GridBasicFeatures extends AbstractComponentTest<Grid> {
 
                     }
                 });
+
+        createClickAction("All columns expanding, Col 0 has max width of 30px",
+                "Columns", new Command<Grid, Boolean>() {
+
+                    @Override
+                    public void execute(Grid c, Boolean value, Object data) {
+                        for (Column col : grid.getColumns()) {
+                            col.setWidthUndefined();
+                        }
+                        grid.getColumns().get(0).setMaximumWidth(30);
+                    }
+                }, null);
     }
 
     private static String getColumnProperty(int c) {

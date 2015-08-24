@@ -17,6 +17,7 @@
 package com.vaadin.client.connectors;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import com.vaadin.client.ServerConnector;
@@ -64,14 +65,6 @@ public class RpcDataSourceConnector extends AbstractExtensionConnector {
          * @see GridState#JSONKEY_DETAILS_VISIBLE
          */
         void reapplyDetailsVisibility(int rowIndex, JsonObject row);
-
-        /**
-         * Closes details for a row.
-         * 
-         * @param rowIndex
-         *            the index of the row for which to close details
-         */
-        void closeDetails(int rowIndex);
     }
 
     public class RpcDataSource extends AbstractRemoteDataSource<JsonObject> {
@@ -104,15 +97,26 @@ public class RpcDataSourceConnector extends AbstractExtensionConnector {
                 public void resetDataAndSize(int size) {
                     RpcDataSource.this.resetDataAndSize(size);
                 }
+
+                @Override
+                public void updateRowData(JsonObject row) {
+                    RpcDataSource.this.updateRowData(row);
+                }
             });
         }
 
         private DataRequestRpc rpcProxy = getRpcProxy(DataRequestRpc.class);
         private DetailsListener detailsListener;
+        private JsonArray droppedRowKeys = Json.createArray();
 
         @Override
         protected void requestRows(int firstRowIndex, int numberOfRows,
                 RequestRowsCallback<JsonObject> callback) {
+            if (droppedRowKeys.length() > 0) {
+                rpcProxy.dropRows(droppedRowKeys);
+                droppedRowKeys = Json.createArray();
+            }
+
             /*
              * If you're looking at this code because you want to learn how to
              * use AbstactRemoteDataSource, please look somewhere else instead.
@@ -222,9 +226,23 @@ public class RpcDataSourceConnector extends AbstractExtensionConnector {
             }
         }
 
+        /**
+         * Updates row data based on row key.
+         * 
+         * @since
+         * @param row
+         *            new row object
+         */
+        protected void updateRowData(JsonObject row) {
+            int index = indexOfKey(getRowKey(row));
+            if (index >= 0) {
+                setRowData(index, Collections.singletonList(row));
+            }
+        }
+
         @Override
-        protected void onDropFromCache(int rowIndex) {
-            detailsListener.closeDetails(rowIndex);
+        protected void onDropFromCache(int rowIndex, JsonObject row) {
+            droppedRowKeys.set(droppedRowKeys.length(), getRowKey(row));
         }
     }
 

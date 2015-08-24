@@ -1475,6 +1475,9 @@ public class Escalator extends Widget implements RequiresResize,
                         cellElem.addClassName("frozen");
                         position.set(cellElem, scroller.lastScrollLeft, 0);
                     }
+                    if (columnConfiguration.frozenColumns > 0 && col == columnConfiguration.frozenColumns - 1) {
+                        cellElem.addClassName("last-frozen");
+                    }
                 }
 
                 referenceRow = paintInsertRow(referenceRow, tr, row);
@@ -1732,6 +1735,14 @@ public class Escalator extends Widget implements RequiresResize,
         }
 
         public void setColumnFrozen(int column, boolean frozen) {
+            toggleFrozenColumnClass(column, frozen, "frozen");
+
+            if (frozen) {
+                updateFreezePosition(column, scroller.lastScrollLeft);
+            }
+        }
+
+        private void toggleFrozenColumnClass(int column, boolean frozen, String className) {
             final NodeList<TableRowElement> childRows = root.getRows();
 
             for (int row = 0; row < childRows.getLength(); row++) {
@@ -1742,16 +1753,16 @@ public class Escalator extends Widget implements RequiresResize,
 
                 TableCellElement cell = tr.getCells().getItem(column);
                 if (frozen) {
-                    cell.addClassName("frozen");
+                    cell.addClassName(className);
                 } else {
-                    cell.removeClassName("frozen");
+                    cell.removeClassName(className);
                     position.reset(cell);
                 }
             }
+        }
 
-            if (frozen) {
-                updateFreezePosition(column, scroller.lastScrollLeft);
-            }
+        public void setColumnLastFrozen(int column, boolean lastFrozen) {
+            toggleFrozenColumnClass(column, lastFrozen, "last-frozen");
         }
 
         public void updateFreezePosition(int column, double scrollLeft) {
@@ -2756,17 +2767,33 @@ public class Escalator extends Widget implements RequiresResize,
                     // move the surrounding rows to their correct places.
                     double rowTop = (unupdatedLogicalStart + (end - start))
                             * getDefaultRowHeight();
-                    final ListIterator<TableRowElement> i = visualRowOrder
-                            .listIterator(visualTargetIndex + (end - start));
 
-                    int logicalRowIndexCursor = unupdatedLogicalStart;
-                    while (i.hasNext()) {
-                        rowTop += spacerContainer
-                                .getSpacerHeight(logicalRowIndexCursor++);
+                    // TODO: Get rid of this try/catch block by fixing the
+                    // underlying issue. The reason for this erroneous behavior
+                    // might be that Escalator actually works 'by mistake', and
+                    // the order of operations is, in fact, wrong.
+                    try {
+                        final ListIterator<TableRowElement> i = visualRowOrder
+                                .listIterator(visualTargetIndex + (end - start));
 
-                        final TableRowElement tr = i.next();
-                        setRowPosition(tr, 0, rowTop);
-                        rowTop += getDefaultRowHeight();
+                        int logicalRowIndexCursor = unupdatedLogicalStart;
+                        while (i.hasNext()) {
+                            rowTop += spacerContainer
+                                    .getSpacerHeight(logicalRowIndexCursor++);
+
+                            final TableRowElement tr = i.next();
+                            setRowPosition(tr, 0, rowTop);
+                            rowTop += getDefaultRowHeight();
+                        }
+                    } catch (Exception e) {
+                        Logger logger = getLogger();
+                        logger.warning("Ignored out-of-bounds row element access");
+                        logger.warning("Escalator state: start=" + start
+                                + ", end=" + end + ", visualTargetIndex="
+                                + visualTargetIndex
+                                + ", visualRowOrder.size()="
+                                + visualRowOrder.size());
+                        logger.warning(e.toString());
                     }
                 }
 
@@ -4309,6 +4336,17 @@ public class Escalator extends Widget implements RequiresResize,
                     firstUnaffectedCol = oldCount;
                 }
 
+                if (oldCount > 0) {
+                    header.setColumnLastFrozen(oldCount - 1, false);
+                    body.setColumnLastFrozen(oldCount - 1, false);
+                    footer.setColumnLastFrozen(oldCount - 1, false);
+                }
+                if (count > 0) {
+                    header.setColumnLastFrozen(count - 1, true);
+                    body.setColumnLastFrozen(count - 1, true);
+                    footer.setColumnLastFrozen(count - 1, true);
+                }
+
                 for (int col = firstAffectedCol; col < firstUnaffectedCol; col++) {
                     header.setColumnFrozen(col, frozen);
                     body.setColumnFrozen(col, frozen);
@@ -5619,14 +5657,29 @@ public class Escalator extends Widget implements RequiresResize,
         horizontalScrollbar.setScrollbarThickness(scrollbarThickness);
         horizontalScrollbar
                 .addVisibilityHandler(new ScrollbarBundle.VisibilityHandler() {
+
+                    private boolean queued = false;
+
                     @Override
                     public void visibilityChanged(
                             ScrollbarBundle.VisibilityChangeEvent event) {
+                        if (queued) {
+                            return;
+                        }
+                        queued = true;
+
                         /*
                          * We either lost or gained a scrollbar. In any case, we
                          * need to change the height, if it's defined by rows.
                          */
-                        applyHeightByRows();
+                        Scheduler.get().scheduleFinally(new ScheduledCommand() {
+
+                            @Override
+                            public void execute() {
+                                applyHeightByRows();
+                                queued = false;
+                            }
+                        });
                     }
                 });
 
